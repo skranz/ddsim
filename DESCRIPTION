@@ -1,0 +1,15 @@
+Package: ddsim
+Type: Package
+Title: Simple dynamic discrete-time simulations (for economics)
+Version: 0.1
+Date: 2017-05-27
+Author: Sebastian Kranz
+Maintainer: Sebastian Kranz <sebastian.kranz@uni-ulm.de>
+Description: Simple dynamic discrete-time simulations (for economics)
+License: GPL >= 2.0
+Depends:
+    dplyr,restorepoint,
+    stringtools, rmdtools,
+    nleqslv,
+    symbeqs,
+RoxygenNote: 5.0.0
