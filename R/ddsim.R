@@ -1,7 +1,7 @@
 examples.ddsim = function() {
   
   dd = ddsim() %>%
-    dd_param(G=NA,I=10,C0=2,c=0.8, tau = 0.4, decay=0.2) %>%
+    dd_param(G=NA,I=10,C0=2,c=0.8, tau = 0.4, decay=1) %>%
     dd_init_fixed(Y=100) %>%
     dd_init_steady_state(Y,EV) %>%
     dd_explicit(
@@ -9,13 +9,20 @@ examples.ddsim = function() {
       C = C0 + c*EV,
       Y = C + G + I
     ) %>%
-    dd_shock(G=G+10, start=2, length=1) %>%
-    dd_run(T=20)
+    dd_shock(G=G+20, start=3, length=1, name="Staatsausgabenerhöhung.") %>%
+    dd_run(T=10)
   sim = dd_data(dd)
-  d = dd_data(dd, long=TRUE)
-  
+
   show = c("C","Y","G")
+  dd_dyplot(dd,sim,show)
+  
+  
+  dyplot(sim[1:10,],xcol="t",ycol=show) %>%
+    dy.annotate.shock()
+
+  d = dd_data(dd, long=TRUE)
   d = filter(d, var %in% show)
+  
   library(ggplot2)
   gg = ggplot(d,aes(t, value, color=var)) + geom_line() + theme_bw() + facet_wrap(~var,scales = "free") + xlab("") + ylab("")
   gg
@@ -101,12 +108,12 @@ dd_data = function(dd,long=FALSE) {
   dat
 }
 
-dd_shock = function(dd,..., start=1, end=start+length, length=1, name=NULL) {
+dd_shock = function(dd,..., start=1, end=start+length-1, length=1, name=NULL) {
   shock = eval(substitute(alist(...)))
   pars = names(shock)
   calls = shock
   
-  shock = list(pars=pars, calls=calls, start=start, end=end, name=name)
+  shock = list(pars=pars, calls=calls, start=start, end=end, length=length, name=name)
   if (!is.null(name)) {
     dd$shocks[[name]] = shock 
   } else {

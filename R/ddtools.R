@@ -1,4 +1,11 @@
+first.non.null = function(...) {
+  args = list(...)
+  for (val in args) {
+    if (!is.null(val)) return(val)
+  }
+  return(NULL)
 
+}
 set_df_num_rows = function(df, num.rows) {
   if (is.null(df)) return(NULL)
   if (NROW(df)==T) return(df)
