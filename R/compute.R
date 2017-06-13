@@ -18,7 +18,7 @@ dd_make_computefun = function(dd) {
 
   fun.body = substitute({
     if (is.null(mat)) {
-      mat = make.dd.parvar.mat(dd=dd,T=T, par.mat=par.mat)
+      mat = make.dd.parvar.mat(dd=dd,T=T)
     }
     
     for (ti in 2:(T+1)){
@@ -27,7 +27,7 @@ dd_make_computefun = function(dd) {
     mat
   }, list(explicit.assign = explicit.assign))
   
-  fun = function(T,dd=NULL,mat=NULL, par.mat=NULL) {}
+  fun = function(T,dd=NULL,mat=NULL) {}
   body(fun) <- fun.body
 
   # compile function with byte code complier
@@ -38,15 +38,43 @@ dd_make_computefun = function(dd) {
   
 }
 
-make.dd.parvar.mat = function(dd, T, par.mat=NULL) {
+make.dd.par.mat = function(dd, T=dd$T) {
+  restore.point("make.dd.par.mat")
   # we create T+2 rows
-  
-  if (is.null(par.mat)) {
-    rows = c(1, (0:T %% NROW(dd$param))+1)
-    par.mat = dd$param[rows,]
+  rows = c(1, (0:T %% NROW(dd$param))+1)
+  par.mat = dd$param[rows,]
+  if (!is.null(dd$timevar)) {
+    time.mat = matrix(0:(T+1),ncol=1)
+    colnames(time.mat) = dd$timevar
+    par.mat = cbind(time.mat, par.mat)
   }
+  
+  if (length(dd$shocks)>0) {
+    par.df = as_data_frame(par.mat)
+    for (shock in dd$shocks) {
+      par.df = compute.shock.on.par.df(par.df = par.df, shock=shock,T=T)
+    }
+    par.mat = as.matrix(par.df)
+  }
+  par.mat
+}
+
+compute.shock.on.par.df = function(par.df, shock, T=NROW(par.df)-2) {
+  restore.point("compute.shock.on.par.df")  
+  if (shock$start>T+1) return(par.df)
+  shock.t = shock$start:min(shock$end, T+1)
+  for (par in shock$pars) {
+    val = eval(shock$calls[[par]], par.df[shock.t,])
+    par.df[[par]][shock.t] = val
+  }
+  par.df
+}
+
+
+make.dd.parvar.mat = function(dd, T=dd$T, par.mat=make.dd.par.mat(dd,T)) {
   vars = names(dd$explicit)
   
+  # we create T+2 rows
   var.mat = matrix(NA_real_,T+2,length(vars))
   colnames(var.mat) = vars
 

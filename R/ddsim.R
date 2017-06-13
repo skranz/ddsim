@@ -1,30 +1,58 @@
 examples.ddsim = function() {
+  
+
   dd = ddsim() %>%
-    dd_param(G=50,I=10,C0=2,c=0.8, tau = 0.4) %>%
-    dd_init0(Y=100) %>%
+    dd_param(G=NA,I=10,C0=2,c=0.8, tau = 0.4) %>%
+    dd_init_fixed(Y=100) %>%
+    dd_init_steady_state(Y) %>%
     dd_explicit(
       EV = (1-lag_tau)*lag_Y,
       C = C0 + c*EV,
       Y = C + G + I
-    ) %>% 
-    dd_run(T=100)
+    ) %>%
+    dd_shock(G=G+10, start=8, length=4) %>%
+    dd_run(T=20)
   sim = dd_data(dd)
+  d = dd_data(dd, long=TRUE)
   
+  show = c("C","Y","G")
+  d = filter(d, var %in% show)
+  gg = ggplot(d,aes(t, value, color=var)) + geom_line() + theme_bw() + facet_wrap(~var,scales = "free") + xlab("") + ylab("")
+  gg
+  ggplotly(gg) %>% config(displayModeBar = F)
+  
+  
+  d = filter(d, var=="Y" | var=="C") %>% mutate(time=t, Kennzahl = var)
+  library(ggplot2)
+  library(plotly)
+  gg = ggplot(d,aes(t, value, fill=Kennzahl,frame=t, ids=var)) + geom_point() 
+  gg
+  ggplotly(gg) %>% config(displayModeBar = F)
+  
+  data(gapminder, package = "gapminder")
+  d = gapminder
+gg <- ggplot(d, aes(year, lifeExp)) +
+  geom_point(aes(size = pop, frame = year, ids = country))
+ggplotly(gg)
 }
 
-ddsim = function(...) {
-  dd = nlist(...)
+ddsim = function(timevar="t",...) {
+  dd = nlist(timevar,..., shocks=list())
   class(dd) = c("ddsim","list")
   dd
 }
 
 dd_param = function(dd,...) {
-  li = list(...)
-  restore.point("dd_param")
-  dd$param = do.call(cbind, li)
-  dd$par.names = names(li)
+  dd$param = list(...)
+  dd$par.names = dd$param
   dd
 }
+
+dd_eqs = function(dd,...) {
+  dd$eqs = eval(substitute(alist(...)))
+  dd
+}
+
 
 dd_explicit = function(dd,...) {
   vars = eval(substitute(alist(...)))
@@ -33,24 +61,15 @@ dd_explicit = function(dd,...) {
   dd
 }
 
-dd_init0 = function(dd,...) {
-  dd$init0 = c(...)
-  dd
-}
-
-dd_init1 = function(dd,...) {
-  dd$init1 = c(...)
-  dd
-}
-
-
-dd_run = function(dd, T = NROW(dd$param)) {
+dd_run = function(dd, T = first.none.null(dd[["T"]],NROW(dd$param))) {
   restore.point("dd_run")
   
+  dd_compute_initial_values(dd)
+  
+  dd$T = T
   if (is.null(dd$explicit) & is.null(dd$eqs)) {
-    rows = (0:(T-1) %% NROW(dd$param))+1
-    par.mat = dd$param[rows,]
-    dd$data = dd$par.mat
+    par.mat = make.dd.par.mat(dd=dd,T=T)
+    dd$data = as_data_frame(dd$par.mat[2:(T+1),])
     return(dd)
   }
 
@@ -65,12 +84,44 @@ dd_run = function(dd, T = NROW(dd$param)) {
   }
   
   dat = dd$compute.fun(T=T, dd=dd)
-  dd$data = dat[2:(T+1),]
+  dd$data = as_data_frame(dat[2:(T+1),])
   dd
 }
 
-dd_data = function(dd,...) {
-  if (is.null(dd[["data"]]))
-    dd = dd_run(dd,...)
-  dd$data
+dd_data = function(dd,long=FALSE) {
+  if (!long)
+    return(dd$data)
+  
+  library(tidyr)
+  vars = setdiff(colnames(dd$data),dd$timevar)
+  dat = gather_(dd$data,key_col = "var",value_col = "value",gather_cols = vars)
+  dat
+}
+
+dd_shock = function(dd,..., start=1, end=start+length, length=1, name=NULL) {
+  shock = eval(substitute(alist(...)))
+  pars = names(shock)
+  calls = shock
+  
+  shock = list(pars=pars, calls=calls, start=start, end=end, name=name)
+  if (!is.null(name)) {
+    dd$shocks[[name]] = shock 
+  } else {
+    dd$shocks = c(dd$shocks, list(shock))
+  }
+  dd
+}
+
+dd_clear_shocks = function(dd) {
+  dd$shocks = list()
+  dd
+}
+
+get_dd_var.names = function(dd) {
+  names(dd$explicit)
+}
+
+get_dd_par.names = function(dd) {
+  dd$par.names
+
 }
