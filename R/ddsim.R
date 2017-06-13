@@ -1,19 +1,21 @@
 examples.ddsim = function() {
   
   dd = ddsim() %>%
-    dd_param(G=NA,I=10,C0=2,c=0.8, tau = 0.4, decay=1) %>%
-    dd_init_fixed(Y=100) %>%
+    dd_param(G=0,I=10,C0=50,c=0, tau = 0, decay=0.5) %>%
+   # dd_init_fixed(Y=100) %>%
     dd_init_steady_state(Y,EV) %>%
     dd_explicit(
       EV = decay*(1-lag_tau)*lag_Y + (1-decay)*lag_EV,
       C = C0 + c*EV,
       Y = C + G + I
-    ) %>%
-    dd_shock(G=G+20, start=3, length=1, name="Staatsausgabenerhöhung.") %>%
+     ) %>%
+    dd_expost(V = (1-tau)*Y, S = V-C, S_PLAN=EV-C) %>%
+    #dd_shock(G=G+20, start=3, length=1, name="Staatsausgabenerhöhung.") %>%
+    dd_shock(C0=C0-30, start=3, length=Inf, name="Sparschock") %>%
     dd_run(T=10)
   sim = dd_data(dd)
 
-  show = c("C","Y","G")
+  show = c("C","Y","S","S_PLAN")
   dd_dyplot(dd,sim,show)
   
   
@@ -68,6 +70,11 @@ dd_explicit = function(dd,...) {
   dd
 }
 
+dd_expost = function(dd,...) {
+  dd$expost.vars =  eval(substitute(alist(...)))
+  dd
+}
+
 dd_run = function(dd, T = first.none.null(dd[["T"]],NROW(dd$pars))) {
   restore.point("dd_run")
 
@@ -94,7 +101,11 @@ dd_run = function(dd, T = first.none.null(dd[["T"]],NROW(dd$pars))) {
   }
   
   dat = dd$compute.fun(T=T, dd=dd)
-  dd$data = as_data_frame(dat[1:T,])
+  data = as_data_frame(dat[1:T,])
+  for (var in names(dd$expost.vars)) {
+    data[[var]] = eval(dd$expost.vars[[var]], data)
+  }
+  dd$data = data
   dd
 }
 
