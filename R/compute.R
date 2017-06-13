@@ -21,7 +21,7 @@ dd_make_computefun = function(dd) {
       mat = make.dd.parvar.mat(dd=dd,T=T)
     }
     
-    for (ti in 2:(T+1)){
+    for (ti in 2:T){
       explicit.assign
     }
     mat
@@ -41,21 +41,24 @@ dd_make_computefun = function(dd) {
 make.dd.par.mat = function(dd, T=dd$T) {
   restore.point("make.dd.par.mat")
   # we create T+2 rows
-  rows = c(1, (0:T %% NROW(dd$param))+1)
-  par.mat = dd$param[rows,]
-  if (!is.null(dd$timevar)) {
-    time.mat = matrix(0:(T+1),ncol=1)
-    colnames(time.mat) = dd$timevar
-    par.mat = cbind(time.mat, par.mat)
+  pars = dd$pars
+  if (!is.null(dd$init.pars)) {
+    for (i in names(dd$init.pars)) {
+      pars[[i]][1] = dd$init.pars[[i]]
+    }
   }
+
+  li = c(list(.TIME.VAR = 1:(T+1)),pars)  
+  par.df = do.call(data_frame, li)
+  if (!is.null(dd$timevar))
+    colnames(par.df)[1] = dd$timevar
   
   if (length(dd$shocks)>0) {
-    par.df = as_data_frame(par.mat)
     for (shock in dd$shocks) {
       par.df = compute.shock.on.par.df(par.df = par.df, shock=shock,T=T)
     }
-    par.mat = as.matrix(par.df)
   }
+  par.mat = as.matrix(par.df)
   par.mat
 }
 
@@ -75,20 +78,11 @@ make.dd.parvar.mat = function(dd, T=dd$T, par.mat=make.dd.par.mat(dd,T)) {
   vars = names(dd$explicit)
   
   # we create T+2 rows
-  var.mat = matrix(NA_real_,T+2,length(vars))
+  var.mat = matrix(NA_real_,T+1,length(vars))
   colnames(var.mat) = vars
 
-  mat = cbind(par.mat, var.mat)
-  
-  # set initial values
-  if (!is.null(dd$init0)) {
-    init0 = unlist(dd$init0)
-    mat[1,names(init0)] = init0
-  }
-  if (!is.null(dd$init1)) {
-    init1 = unlist(dd$init1)
-    mat[2,names(init1)] = init1
-  }
+  mat = cbind(var.mat, par.mat)
+  mat[1, names(dd$init.vars)] = dd$init.vars
   mat
 }
 

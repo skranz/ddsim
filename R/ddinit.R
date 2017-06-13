@@ -1,6 +1,6 @@
 
 dd_init_fixed = function(dd,...) {
-  dd$init_fixed = c(...)
+  dd$init.fixed = c(...)
   dd
 }
 
@@ -58,18 +58,29 @@ dd_compute_initial_values = function(dd,...) {
   syms = unique(unlist(lapply(eqs, find.variables)))
   
   # Specify exogeneous variables and parameters
-  exo.vars = dd$init_fixed
-  is.exo = unlist(lapply(dd$param, function(par) !is.na(par[[1]])))
-  exo.pars = lagged.exo.pars = dd$param[is.exo]
+  exo.vars = dd$init.fixed
+  is.exo = unlist(lapply(dd$pars, function(par) !is.na(par[[1]])))
+  exo.pars = lagged.exo.pars = dd$pars[is.exo]
   names(lagged.exo.pars) =  paste0("lag_", names(exo.pars))
   
   exo = c(exo.vars, exo.pars, lagged.exo.pars)
   exo.names = names(exo)
-  endo = setdiff(syms,exo.names)
+  endo.names = setdiff(syms,exo.names)
+  
+  if (dd$verbose)
+    cat("\nFind initial values...")
   
   # cluster.equations so that we can solve the more easily
-  df = symbeqs::cluster.equations(eqs, endo=endo)
-  
+  df = suppressWarnings(symbeqs::cluster.equations(eqs, endo=endo.names,verbose = dd$verbose))
+  dd$init.equation.clusters = df 
   # compute the values of all endogenous symbols
-  vals = symbeqs::eval.cluster.df(df, exo=exo)
+  vals = suppressWarnings(symbeqs::eval.cluster.df(df, exo=exo))
+  
+  init.vals = c(vals, unlist(exo))
+  dd$init.vars = init.vals[dd$var.names]
+  dd$init.pars = init.vals[dd$par.names]
+  if (dd$verbose)
+    cat("\nInitial values computed.")
+  
+  dd
 }
