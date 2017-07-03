@@ -1,25 +1,24 @@
-The R package EconCurves is part of the bundle: EconCurves, EconModels and EconStories thathelps to build interactive shiny illustrations and exercises on the web for simple or intermediate economic models. 
+Simple discrete dynamic simulations in R. Mainly used to illustrate simple dynamic economic models. No fancy stuff like solving DSGE equilibria, though.
 
-The EconCurves package provides infrastructure to work with curves. For example, we can
+An example
+```r
+library(ddsim)
 
-  - symbolically define curves
-  - draw one or several curves in panes
-  - perform computations like cutpoints between two curves
-  - check user clicks relative to curves (above, below, etc)
-  
-Curves can be specified with a yaml syntax and then be parsed.
+dd = ddsim(verbose=TRUE) %>%
+  dd_param(I=10,c0=0,c1=0.9) %>%
+  dd_init_fixed(lag_Y=100, EY=100) %>%
+  dd_explicit(
+    EY = lag_Y,
+    C = c0 + c1*EY,
+    Y = C + I
+   ) %>%
+  dd_expost(S = Y-C, S_PLAN=EY-C, "Geplante Sparquote" = (1-c1)*100, "Reale Sparquote" = 100*S / Y) %>%
+  dd_shock(c1=0.8, start=3, length=Inf, name="Sparschock") %>%
+  dd_run(T=20)
 
-Main objects:
-  - pane: a pane with x and y axis in which one or several curves
-    can be drawn.
-  - curve: a symbolic specification of a curve. Specified by an
-    equation, which is tried to be solved for explicit x and y
-    solutions. Can contain extra information like color scheme
-    or label
-  - marker: a horizontal or vertical straight line
-  - data: a dataframe or list that contains parameter values
-    used to compute a curve.
-  - geom: contains actually computed x and y values of a curve
-    or marker given x and y ranges and some data.
+sim = dd_data(dd)
 
-[http://econfin.de:3838/makro/](http://econfin.de:3838/makro/)
+show = c("C","Y","S","S_PLAN","Geplante Sparquote")
+dd_dyplot(dd,sim,show)
+
+```

@@ -1,5 +1,81 @@
 examples.ddsim = function() {
+
   
+library(ddsim)
+dd = ddsim(verbose=TRUE) %>%
+  dd_param(alpha = 0.45,s = 0.2,delta = 0.1,eta = 1, k0=1,y0=1) %>%
+  dd_init_fixed(y=~y0) %>%
+  dd_explicit(
+    k = (1-delta)*lag_k + s*lag_y,
+    y = eta*k^alpha
+   ) %>%
+  dd_expost("Netto Investitionen" = s*y-delta*k,  k_star = (s*eta / delta)^(1/(1-alpha))) %>%
+  dd_run_scens(pars=list(y0=c(1,2,3,4),T=50))
+
+sim = dd_data(dd)  
+  library(ddsim)
+  dd = ddsim(verbose=TRUE) %>%
+    dd_param(alpha = 0.7,s = 0.2,delta = 0.1,eta = 1, k0=1,y0=1, k_star = ~(s*eta / delta)^(1/(1-alpha))) %>%
+    dd_init_fixed(y=~y0) %>%
+    dd_explicit(
+      k = (1-delta)*lag_k + s*lag_y,
+      y = eta*k^alpha
+     ) %>%
+    dd_expost("Netto Investitionen" = s*y-delta*k) %>% 
+    dd_run_scens(pars=list(y0=c(0.00001,0.1,1,3)),T=50)
+
+  sim = dd_data(dd) %>%
+    mutate("BIP_0"=as.factor(y0))
+  
+  library(ggplot2)
+  p = ggplot(data=sim, aes(x=t,y=y,color=BIP_0)) + geom_line() + ylab("BIP") + theme_bw()
+  p
+
+  d = sim %>% group_by(BIP_0) %>%
+    summarize(Wachstum=100*(y[10]/y[1]-1),y0=y[1])
+
+  p = ggplot(data=d, aes(x=y0,y=Wachstum)) + geom_line() + ylab("Wachstum")  + theme_bw()
+  p
+  
+    
+  sim = dd_data(dd) %>%
+    mutate("Startkapital"=as.factor(k0))
+  
+  library(ggplot2)
+  p = ggplot(data=sim, aes(x=t,y=y,color=Startkapital, group=k0)) + geom_line() + ylab("BIP") + theme_bw()
+  p
+  
+  d = sim %>% group_by(k0, Startkapital) %>%
+    summarize(Wachstum=100*(y[n()]/y[1]-1),y0=y[1])
+
+  p = ggplot(data=d, aes(x=y0,y=Wachstum)) + geom_line() + ylab("Wachstum")  + theme_bw()
+  p
+
+  dd = dd %>%
+    dd_init_fixed(k=kstar) %>%
+    dd_run_scens(par=list(eta=c(0.1,0.5,1,2,3)),T=50)
+  
+  sim = dd_data(dd) %>%
+    mutate("Startkapital"=as.factor(k0))   
+  
+    
+  
+  dd = ddsim(verbose=TRUE) %>%
+    dd_param(I=10,c0=0,c1=0.9) %>%
+    dd_init_fixed(lag_Y=100, EY=100) %>%
+    dd_explicit(
+      EY = lag_Y,
+      C = c0 + c1*EY,
+      Y = C + I
+     ) %>%
+    dd_expost(S = Y-C, S_PLAN=EY-C, "Geplante Sparquote" = (1-c1)*100, "Reale Sparquote" = 100*S / Y) %>%
+    dd_shock(c1=0.8, start=3, length=Inf, name="Sparschock") %>%
+    dd_run(T=20)
+    sim = dd_data(dd)
+
+  
+  
+    
   dd = ddsim() %>%
     dd_param(G=0,I=10,C0=0,c=0.8, tau = 0, decay=1) %>%
    # dd_init_fixed(Y=100) %>%
@@ -54,6 +130,12 @@ ddsim = function(timevar="t",verbose=FALSE) {
 }
 
 dd_param = function(dd,...) {
+#  pars = eval(substitute(alist(...)))
+#  restore.point("dd_param")
+#  values = list()
+#  for (par in names(pars)) {
+#    values[[par]] = eval(pars[[par]], values)
+#  }
   dd$pars = list(...)
   dd$par.names = names(dd$pars)
   dd
@@ -77,11 +159,50 @@ dd_expost = function(dd,...) {
   dd
 }
 
-dd_run = function(dd, T = first.none.null(dd[["T"]],NROW(dd$pars))) {
+dd_compile = function(dd, compile=TRUE, compile.initial=TRUE) {
+  if (compile.initial)
+    dd = dd_compile_inital_cluster(dd)
+  if (!compile)
+    return(dd)
+
+  if (!is.null(dd$eqs))
+    stop("Equation solving not yet implemented...")
+    
+  dd = dd_make_computefun(dd)
+}
+
+#' Simulate multiple scenarios that can differ
+#' by their parameters
+dd_run_scens = function(dd,pars=list(),par.df=NULL, T = first.none.null(dd$pars[["T"]],dd[["T"]],NROW(dd$pars)), compile=TRUE, compile.initial=compile) {
+  restore.point("dd_run_scens")
+
+  if (is.null(par.df)) {
+    par.df = as_data_frame(expand.grid(pars, stringsAsFactors = FALSE))
+  }
+  
+  dd = dd_compile(dd, compile=compile, compile.initial=compile.initial)
+
+  li = lapply(seq_len(NROW(par.df)), function(row) {
+    restore.point("sdnsdj")
+    par = as.list(par.df[row,])
+    dd$init.exo[names(par)] = dd$pars[names(par)] = par
+    if (T %in% names(par))
+      T = par$T
+    dd_run(dd,T=T, compile=FALSE, return.data = TRUE)
+  })
+  data = bind_rows(li)  
+  dd$data = data
+  dd
+}
+
+
+dd_run = function(dd, T = first.none.null(dd$pars[["T"]],dd[["T"]],NROW(dd$pars)), compile=TRUE, compile.initial=compile, return.data=FALSE) {
   restore.point("dd_run")
 
-  dd = dd_compute_initial_values(dd)
   
+  dd = dd_compile(dd, compile=compile, compile.initial=compile.initial)
+  
+  dd = dd_compute_initial_values(dd,recompile = FALSE)
   
   dd$T = T
   if (is.null(dd$explicit) & is.null(dd$eqs)) {
@@ -90,23 +211,14 @@ dd_run = function(dd, T = first.none.null(dd[["T"]],NROW(dd$pars))) {
     return(dd)
   }
 
-
-  
-  if (!is.null(dd$eqs))
-    stop("Equation solving not yet implemented.")
-
   vars = names(dd$explicit)
   dd$var.names = vars
-
-  if (is.null(dd$compute.fun)) {
-    dd = dd_make_computefun(dd)
-  }
-  
   dat = dd$compute.fun(T=T, dd=dd)
   data = as_data_frame(dat[1:T,])
   for (var in names(dd$expost.vars)) {
     data[[var]] = eval(dd$expost.vars[[var]], data)
   }
+  if (return.data) return(data)
   dd$data = data
   dd
 }

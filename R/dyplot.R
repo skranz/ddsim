@@ -31,9 +31,9 @@ dd_dyplot = function(dd, dat=dd_data(dd), cols=dd$var.names, main="",xlab=dd$tim
   }
   p
 }
-dy_annotate_shocks = function(dygraph, shocks=dd$shocks,dd=NULL, T = first.non.null(dd$T,NROW(dygraph$x$data[[1]])), rows = 1:T) {
+dy_annotate_shocks = function(dygraph, shocks=dd[["shocks"]],dd=NULL, T = first.non.null(dd$T,NROW(dygraph$x$data[[1]])), rows = 1:T) {
   restore.point("dy_annotate_shocks")
-  shock = shocks[[1]]
+  #shock = shocks[[1]]
   for (shock in shocks) {
     if (shock$start > max(rows)) next
     #start = t.to.date(shock$start)

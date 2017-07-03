@@ -44,7 +44,11 @@ make.dd.par.mat = function(dd, T=dd$T) {
   pars = dd$pars
   if (!is.null(dd$init.pars)) {
     for (i in names(dd$init.pars)) {
-      pars[[i]][1] = dd$init.pars[[i]]
+      if (is_lazy_value(pars[[i]])) {
+        pars[[i]] = dd$init.pars[[i]]
+      } else {
+        pars[[i]][1] = dd$init.pars[[i]]        
+      }
     }
   }
 
