@@ -10,7 +10,7 @@ dd = ddsim(verbose=TRUE) %>%
     y = eta*k^alpha
    ) %>%
   dd_expost("Netto Investitionen" = s*y-delta*k,  k_star = (s*eta / delta)^(1/(1-alpha))) %>%
-  dd_run_scens(pars=list(y0=c(1,2,3,4),T=50))
+  dd_run_scens(pars=list(y0=c(1,2,3,4)),T=50)
 
 sim = dd_data(dd)  
   library(ddsim)
@@ -173,11 +173,13 @@ dd_compile = function(dd, compile=TRUE, compile.initial=TRUE) {
 
 #' Simulate multiple scenarios that can differ
 #' by their parameters
-dd_run_scens = function(dd,pars=list(),par.df=NULL, T = first.none.null(dd$pars[["T"]],dd[["T"]],NROW(dd$pars)), compile=TRUE, compile.initial=compile) {
+dd_run_scens = function(dd,pars=list(), T = first.none.null(dd$pars[["T"]],dd[["T"]],if (is.data.frame(dd$pars)) NROW(dd$pars) else 10), compile=TRUE, compile.initial=compile) {
   restore.point("dd_run_scens")
 
-  if (is.null(par.df)) {
+  if (!is.data.frame(pars)) {
     par.df = as_data_frame(expand.grid(pars, stringsAsFactors = FALSE))
+  } else {
+    par.df = as_data_frame(pars)
   }
   
   dd = dd_compile(dd, compile=compile, compile.initial=compile.initial)
